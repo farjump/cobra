@@ -410,7 +410,7 @@ func hasNoOptDefVal(name string, fs *flag.FlagSet) bool {
 	if flag == nil {
 		return false
 	}
-	return flag.NoOptDefVal != ""
+	return flag.Value.DefaultValue() != ""
 }
 
 func shortHasNoOptDefVal(name string, fs *flag.FlagSet) bool {
@@ -422,7 +422,7 @@ func shortHasNoOptDefVal(name string, fs *flag.FlagSet) bool {
 	if flag == nil {
 		return false
 	}
-	return flag.NoOptDefVal != ""
+	return flag.Value.DefaultValue() != ""
 }
 
 func stripFlags(args []string, c *Command) []string {
@@ -594,24 +594,15 @@ func (c *Command) execute(a []string) (err error) {
 
 	// initialize help flag as the last point possible to allow for user
 	// overriding
-	c.InitDefaultHelpFlag()
+	helpVal := c.InitDefaultHelpFlag()
 
 	err = c.ParseFlags(a)
 	if err != nil {
 		return c.FlagErrorFunc()(c, err)
 	}
 
-	// If help is called, regardless of other flags, return we want help.
-	// Also say we need help if the command isn't runnable.
-	helpVal, err := c.Flags().GetBool("help")
-	if err != nil {
-		// should be impossible to get here as we always declare a help
-		// flag in InitDefaultHelpFlag()
-		c.Println("\"help\" flag declared as non-bool. Please correct your code")
-		return err
-	}
-
-	if helpVal || !c.Runnable() {
+	// We need help if the command isn't runnable.
+	if helpVal.Value || !c.Runnable() {
 		return flag.ErrHelp
 	}
 
@@ -759,17 +750,19 @@ func (c *Command) ValidateArgs(args []string) error {
 // InitDefaultHelpFlag adds default help flag to c.
 // It is called automatically by executing the c or by calling help and usage.
 // If c already has help flag, it will do nothing.
-func (c *Command) InitDefaultHelpFlag() {
+func (c *Command) InitDefaultHelpFlag() *flag.BoolValue {
 	c.mergePersistentFlags()
-	if c.Flags().Lookup("help") == nil {
+	helpFlag := c.Flags().Lookup("help")
+	if helpFlag == nil {
 		usage := "help for "
 		if c.Name() == "" {
 			usage += "this command"
 		} else {
 			usage += c.Name()
 		}
-		c.Flags().BoolP("help", "h", false, usage)
+		_, helpFlag = c.Flags().BoolP("help", "h", usage)
 	}
+	return helpFlag.Value.(*flag.BoolValue)
 }
 
 // InitDefaultHelpCmd adds default help command to c.
@@ -940,9 +933,9 @@ func (c *Command) DebugFlags() {
 		if x.HasFlags() {
 			x.flags.VisitAll(func(f *flag.Flag) {
 				if x.HasPersistentFlags() && x.persistentFlag(f.Name) != nil {
-					c.Println("  -"+f.Shorthand+",", "--"+f.Name, "["+f.DefValue+"]", "", f.Value, "  [LP]")
+					c.Println("  -"+f.Shorthand+",", "--"+f.Name, "["+f.Value.DefaultArg()+"]", "", f.Value, "  [LP]")
 				} else {
-					c.Println("  -"+f.Shorthand+",", "--"+f.Name, "["+f.DefValue+"]", "", f.Value, "  [L]")
+					c.Println("  -"+f.Shorthand+",", "--"+f.Name, "["+f.Value.DefaultArg()+"]", "", f.Value, "  [L]")
 				}
 			})
 		}
@@ -950,10 +943,10 @@ func (c *Command) DebugFlags() {
 			x.pflags.VisitAll(func(f *flag.Flag) {
 				if x.HasFlags() {
 					if x.flags.Lookup(f.Name) == nil {
-						c.Println("  -"+f.Shorthand+",", "--"+f.Name, "["+f.DefValue+"]", "", f.Value, "  [P]")
+						c.Println("  -"+f.Shorthand+",", "--"+f.Name, "["+f.Value.DefaultArg()+"]", "", f.Value, "  [P]")
 					}
 				} else {
-					c.Println("  -"+f.Shorthand+",", "--"+f.Name, "["+f.DefValue+"]", "", f.Value, "  [P]")
+					c.Println("  -"+f.Shorthand+",", "--"+f.Name, "["+f.Value.DefaultArg()+"]", "", f.Value, "  [P]")
 				}
 			})
 		}
